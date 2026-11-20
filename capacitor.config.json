@@ -1,0 +1,6 @@
+{
+  "appId": "co.geocampo.app",
+  "appName": "GeoCampo",
+  "webDir": "docs",
+  "android": { "useLegacyBridge": true }
+}

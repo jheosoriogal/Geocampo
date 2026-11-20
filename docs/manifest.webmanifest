@@ -1,0 +1,16 @@
+{
+  "name": "GeoCampo — captura GPS en campo",
+  "short_name": "GeoCampo",
+  "description": "Puntos, tracks y polígonos con GPS; área en hectáreas; importa y exporta KML, KMZ, GPX, CSV y GeoJSON.",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1f5f3a",
+  "theme_color": "#1f5f3a",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
