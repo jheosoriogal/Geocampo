@@ -182,7 +182,7 @@ const Store = {
 const S = {
   layers: new Map(), features: new Map(), pos: null, follow: true, firstFix: true, dms: false, rec: null,
   listeners: new Set(),
-  settings: {maxAcc: 15, minDist: 3, avgSecs: 10, vtxAvg: false}
+  settings: {maxAcc: 15, minDist: 3, minTime: 5, captureBy: 'dist', avgSecs: 10, vtxAvg: false}
 };
 
 /* ---------- Interfaz: toast, diálogos, hojas ---------- */
@@ -399,19 +399,24 @@ function renderRecUI() {
   const r = S.rec, el = $('#rec'); el.classList.remove('hidden');
   const poly = r.type === 'polygon';
   const btns = [];
-  if (r.mode === 'gps-auto') btns.push(`<button class="btn" id="rPause">${r.paused ? '▶ Reanudar' : '⏸ Pausa'}</button>`);
+  if (r.mode === 'gps-auto') btns.push(`<button class="btn" id="rPause">${r.paused ? '▶ Reanudar' : '⏸ Pausa'}</button>`, `<button class="btn" id="rSet" title="Ajustes de captura">⚙</button>`);
   if (r.mode === 'gps-manual') btns.push(`<button class="btn rec grow" id="rGps">+ Vértice GPS</button>`);
   if (r.mode !== 'gps-auto') btns.push(`<button class="btn" id="rCross">+ En la cruz</button>`);
   btns.push(`<button class="btn" id="rUndo">↶</button>`, `<button class="btn pri" id="rDone">Terminar</button>`, `<button class="btn dan" id="rCancel">✕</button>`);
   el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b>${poly ? 'Polígono' : 'Track / línea'}</b><span class="mut" id="rStatus"></span></div><div id="rStats"></div><div class="row" style="margin-top:6px">${btns.join('')}</div>`;
   const on = (id, fn) => { const b = el.querySelector('#' + id); if (b) b.onclick = fn; };
   on('rPause', () => { r.paused = !r.paused; el.querySelector('#rPause').textContent = r.paused ? '▶ Reanudar' : '⏸ Pausa'; updateRecStats(); saveDraft(); });
+  on('rSet', async () => { await openSettings(); updateRecStats(); });
   on('rGps', addGpsVertex);
   on('rCross', () => { const m = map.getCenter(); addVertex([m.lat, m.lng, null, Date.now()]); });
   on('rUndo', () => { r.coords.pop(); updateRecGeom(); updateRecStats(); saveDraft(); });
   on('rDone', finishRec);
   on('rCancel', async () => { if (!r.coords.length || await confirmDlg('Descartar', '¿Descartar este registro sin guardarlo?', 'Descartar', 'dan')) endRec(); });
   updateRecStats();
+}
+function ruleText() {
+  const s = S.settings;
+  return s.captureBy === 'time' ? `cada ${s.minTime} s` : s.captureBy === 'both' ? `cada ${s.minDist} m y ${s.minTime} s` : `cada ${s.minDist} m`;
 }
 function updateRecStats() {
   const r = S.rec; if (!r) return;
@@ -420,7 +425,7 @@ function updateRecStats() {
     ? `<span class="big">${fmt(areaM2(r.coords) / 1e4, 4)} ha</span> <span class="mut">· perímetro ${fmtLen(perimM(r.coords))} · ${n} vértices</span>`
     : `<span class="big">${fmtLen(lengthM(r.coords))}</span> <span class="mut">· ${n} puntos</span>`;
   let st = '';
-  if (r.mode === 'gps-auto') st = r.paused ? '⏸ En pausa' : (r.status || '● Grabando');
+  if (r.mode === 'gps-auto') st = r.paused ? '⏸ En pausa' : `${r.status || '● Grabando'} · ${ruleText()}`;
   else if (r.mode === 'tap') st = 'Toca el mapa para agregar vértices';
   else st = 'Párate en cada vértice y toca “+ Vértice GPS”';
   $('#rStatus').textContent = st;
@@ -440,7 +445,11 @@ function recTick(p) {
   if (p.acc > S.settings.maxAcc) { r.status = `Esperando precisión (±${fmt(p.acc, 0)} m)`; updateRecStats(); return; }
   r.status = '● Grabando';
   const last = r.coords[r.coords.length - 1];
-  if (last && distM(last, [p.lat, p.lon]) < S.settings.minDist) { updateRecStats(); return; }
+  if (last) {
+    const s = S.settings, okD = distM(last, [p.lat, p.lon]) >= s.minDist, okT = (p.t - (last[3] || 0)) / 1000 >= s.minTime;
+    const ok = s.captureBy === 'time' ? okT : s.captureBy === 'both' ? okD && okT : okD;
+    if (!ok) { updateRecStats(); return; }
+  }
   r.coords.push([p.lat, p.lon, p.alt, p.t]); updateRecGeom(); updateRecStats(); saveDraft();
 }
 async function addGpsVertex() {
@@ -805,10 +814,16 @@ async function openSettings() {
   const r = await dialog({
     title: 'Ajustes de captura', body: `
       <label>Precisión máxima aceptada (m)<input id="sA" type="number" min="1" step="1" value="${s.maxAcc}"></label>
-      <label>Distancia mínima entre puntos al grabar automático (m)<input id="sD" type="number" min="0" step="0.5" value="${s.minDist}"></label>
+      <label>Al grabar automático, tomar un punto según<select id="sB">
+        <option value="dist" ${s.captureBy === 'dist' ? 'selected' : ''}>Distancia recorrida</option>
+        <option value="time" ${s.captureBy === 'time' ? 'selected' : ''}>Tiempo transcurrido</option>
+        <option value="both" ${s.captureBy === 'both' ? 'selected' : ''}>Distancia y tiempo (deben cumplirse ambos)</option></select></label>
+      <label>Distancia entre puntos (m)<input id="sD" type="number" min="0" step="0.5" value="${s.minDist}"></label>
+      <label>Tiempo entre puntos (segundos)<input id="sT" type="number" min="1" step="1" value="${s.minTime}"></label>
+      <p class="mut">Sugerencia para lotes: 2–3 m caminando. Por tiempo, 3–5 s. Valores muy bajos agregan “ruido” del GPS al borde.</p>
       <label>Segundos para promediar<input id="sP" type="number" min="3" step="1" value="${s.avgSecs}"></label>
       <label>Promediar también cada vértice GPS manual<select id="sV"><option value="0">No</option><option value="1" ${s.vtxAvg ? 'selected' : ''}>Sí</option></select></label>`,
-    buttons: [{label: 'Cancelar', value: null}, {label: 'Guardar', cls: 'pri', value: d => ({maxAcc: Math.max(1, +d.querySelector('#sA').value || 15), minDist: Math.max(0, +d.querySelector('#sD').value || 0), avgSecs: Math.max(3, +d.querySelector('#sP').value || 10), vtxAvg: d.querySelector('#sV').value === '1'})}]
+    buttons: [{label: 'Cancelar', value: null}, {label: 'Guardar', cls: 'pri', value: d => ({maxAcc: Math.max(1, +d.querySelector('#sA').value || 15), minDist: Math.max(0, +d.querySelector('#sD').value || 0), minTime: Math.max(1, +d.querySelector('#sT').value || 5), captureBy: d.querySelector('#sB').value, avgSecs: Math.max(3, +d.querySelector('#sP').value || 10), vtxAvg: d.querySelector('#sV').value === '1'})}]
   });
   if (r) { Object.assign(S.settings, r); Store.set('settings', S.settings); updateGpsPanel(); toast('Ajustes guardados'); }
 }
