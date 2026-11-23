@@ -14,7 +14,7 @@
   if (view && view.c) map.setView(view.c, view.z);
   map.on('moveend', () => Store.set('view', {c: map.getCenter(), z: map.getZoom()}));
   for (const h of INIT_HOOKS) { try { await h(); } catch (e) { console.error(e); } }
-  $('#map').classList.toggle('nolbl', map.getZoom() < 15);
+  updLblZoom();
   startGPS();
   const draft = await Store.get('rec').catch(() => null);
   if (draft && draft.coords && draft.coords.length) {

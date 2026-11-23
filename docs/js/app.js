@@ -209,7 +209,8 @@ function colorOf(f) {
   return l?.color || '#e8590c';
 }
 function refreshLayer(lid) { styleCache.delete(lid); for (const f of S.features.values()) if (f.layer === lid) renderFeature(f); }
-map.on('zoomend', () => $('#map').classList.toggle('nolbl', map.getZoom() < 15));
+function updLblZoom() { const z = map.getZoom(), m = $('#map'); [12, 14, 15, 16, 17].forEach(t => m.classList.toggle('below' + t, z < t)); }
+map.on('zoomend', updLblZoom);
 function renderFeature(f) {
   unrender(f.id);
   const color = colorOf(f), ll = f.coords.map(c => [c[0], c[1]]);
@@ -219,7 +220,7 @@ function renderFeature(f) {
   else if (f.type === 'line') o = L.polyline(ll, {color, weight: 4});
   else o = L.polygon([ll, ...(f.holes || []).map(h => h.map(c => [c[0], c[1]]))], {color, weight: 3, fillOpacity: .18});
   const l = S.layers.get(f.layer);
-  if (l && l.label) { const t = fieldVal(f, l.label); if (t != null && t !== '') o.bindTooltip(esc(String(t)), {permanent: true, direction: f.type === 'point' ? 'top' : 'center', className: 'lbl', interactive: false}); }
+  if (l && l.label) { const t = fieldVal(f, l.label); if (t != null && t !== '') o.bindTooltip(esc(String(t)), {permanent: true, direction: f.type === 'point' ? 'top' : 'center', offset: f.type === 'point' ? [0, -6] : [0, 0], className: `lbl lz${l.labelZoom ?? 15}`, interactive: false}); }
   o.on('click', e => {
     L.DomEvent.stop(e);
     if (S.rec && S.rec.mode === 'tap') { addVertex([e.latlng.lat, e.latlng.lng, null, Date.now()]); return; }
@@ -477,14 +478,14 @@ const INFO_ACTIONS = [];   // {label, when(f), run(f)}
 const INFO_EXTRA = [];     // (f, sheet) => html | Promise
 function propsHtml(f) {
   const e = Object.entries(f.props || {}).filter(([, v]) => v != null && v !== '');
-  return e.length ? `<details class="props"><summary>Atributos (${e.length})</summary><table class="kv">${e.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></details>` : '';
+  return e.length ? `<details class="props" open><summary>Información del archivo (${e.length} columnas)</summary><table class="kv">${e.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></details>` : '';
 }
 function showInfo(id) {
   const f = S.features.get(id); if (!f) return;
   const ly = S.layers.get(f.layer);
   const sh = openSheet(`<div class="mut"><span class="sw" style="background:${colorOf(f)}"></span> ${TYPE[f.type]} · ${esc(ly?.name || '')}</div>
-    <label>Nombre<input id="fName" value="${esc(f.name)}"></label>${statsHtml(f)}
-    <label>Descripción<textarea id="fDesc" rows="3">${esc(f.desc || '')}</textarea></label>${propsHtml(f)}<div id="fExtra"></div>
+    <label>Nombre<input id="fName" value="${esc(f.name)}"></label>${propsHtml(f)}${statsHtml(f)}
+    <label>Descripción<textarea id="fDesc" rows="3">${esc(f.desc || '')}</textarea></label><div id="fExtra"></div>
     <div class="row">${INFO_ACTIONS.map((a, i) => a.when(f) ? `<button class="btn" data-ia="${i}">${a.label}</button>` : '').join('')}</div>
     <div class="row"><button class="btn pri" id="fSave">Guardar</button><button class="btn" id="fZoom">Ver en mapa</button><button class="btn" id="fCopy">Copiar</button>${f.type === 'line' ? '<button class="btn" id="fClose">Convertir a polígono</button>' : ''}<button class="btn dan" id="fDel">Eliminar</button></div>`);
   sh.querySelectorAll('[data-ia]').forEach(b => b.onclick = () => INFO_ACTIONS[+b.dataset.ia].run(f));
@@ -513,7 +514,7 @@ function openLayers() {
     const st = layerStyle(l);
     const legend = st ? `<div class="legend">${st.legend.map(([c, t]) => `<span><i style="background:${c}"></i>${esc(t)}</span>`).join('')}</div>` : '';
     const list = fs.slice(0, 500).map(f => `<div class="fi" data-f="${f.id}"><span>${f.photos?.length ? '📷' : f.type === 'point' ? '●' : f.type === 'line' ? '〰' : '⬠'} ${esc(f.name || '(sin nombre)')}</span><span class="mut">${f.type === 'polygon' ? fmt(fArea(f) / 1e4, 4) + ' ha' : f.type === 'line' ? fmtLen(lengthM(f.coords)) : ''}</span></div>`).join('');
-    return `<div class="lyr ${l.id === act ? 'act' : ''}" data-l="${l.id}"><div class="lyr-h"><input type="checkbox" class="vis" ${l.visible ? 'checked' : ''}><input type="color" class="clr" value="${l.color}"><div class="grow"><b>${l.id === act ? '★ ' : ''}${esc(l.name)}</b><div class="mut">${fs.length} elementos${ha ? ` · ${fmt(ha, 4)} ha` : ''}${l.id === act ? ' · capa activa' : ''}</div></div><button class="ib exp">▾</button><button class="ib cfg">⚙</button><button class="ib zm">⤢</button></div>${legend}<div class="lst hidden">${list || '<div class="fi mut">Sin elementos</div>'}${fs.length > 500 ? `<div class="fi mut">… y ${fs.length - 500} más</div>` : ''}</div></div>`;
+    return `<div class="lyr ${l.id === act ? 'act' : ''}" data-l="${l.id}"><div class="lyr-h"><input type="checkbox" class="vis" ${l.visible ? 'checked' : ''}><input type="color" class="clr" value="${l.color}"><div class="grow"><b>${l.id === act ? '★ ' : ''}${esc(l.name)}</b><div class="mut">${fs.length} elementos${ha ? ` · ${fmt(ha, 4)} ha` : ''}${l.id === act ? ' · capa activa' : ''}</div></div><button class="ib lb" title="Etiquetas">🏷</button><button class="ib exp">▾</button><button class="ib cfg">⚙</button><button class="ib zm">⤢</button></div>${l.label ? `<div class="legend">🏷 ${esc(l.label === '__name' ? 'Nombre' : l.label === '__area' ? 'Área (ha)' : l.label)}</div>` : ''}${legend}<div class="lst hidden">${list || '<div class="fi mut">Sin elementos</div>'}${fs.length > 500 ? `<div class="fi mut">… y ${fs.length - 500} más</div>` : ''}</div></div>`;
   }).join('');
   const sh = openSheet(`<h3>Capas</h3><p class="mut" style="margin:0">★ = capa activa: ahí se guardan los puntos, tracks, polígonos y fotos nuevos.</p>${html}
     <div class="row"><button class="btn pri grow" id="lNew">+ Nueva capa / proyecto</button><button class="btn grow" id="lImp">Importar archivo</button><button class="btn grow" id="lExp">Exportar</button></div>${LAYER_TOOLS.map(t => t.html()).join('')}`);
@@ -528,6 +529,7 @@ function openLayers() {
     el.querySelector('.exp').onclick = () => el.querySelector('.lst').classList.toggle('hidden');
     el.querySelector('.zm').onclick = () => { if (!fs().length) return toast('Capa vacía'); closeSheet(); zoomTo(fs()); };
     el.querySelector('.cfg').onclick = () => layerSettings(l);
+    el.querySelector('.lb').onclick = () => labelDialog(l);
     el.querySelectorAll('.fi[data-f]').forEach(r => r.onclick = () => { const f = S.features.get(r.dataset.f); closeSheet(); zoomTo([f]); setTimeout(() => showInfo(f.id), 350); });
   });
 }
@@ -540,6 +542,21 @@ async function newLayerDlg() {
   await saveLayer(l); setActiveLayer(l.id); openLayers(); toast(`Capa activa: ${r}`);
 }
 function setActiveLayer(id) { S.activeLayer = id; Store.set('activeLayer', id); }
+const LBL_Z = [[0, 'Siempre (todo zoom)'], [12, 'Desde zoom 12 (vista de municipio)'], [14, 'Desde zoom 14'], [15, 'Desde zoom 15 (vista de vereda)'], [16, 'Desde zoom 16'], [17, 'Desde zoom 17 (vista de finca)']];
+async function labelDialog(l) {
+  const fs = [...S.features.values()].filter(f => f.layer === l.id), fields = layerFields(l.id), hasPoly = fs.some(f => f.type === 'polygon');
+  const ex = f => fs.find(x => fieldVal(x, f) != null && fieldVal(x, f) !== '');
+  const opt = (v, t) => { const e = ex(v); return `<option value="${esc(v)}" ${(l.label || '') === v ? 'selected' : ''}>${esc(t)}${e ? ` — ej.: ${esc(String(fieldVal(e, v)).slice(0, 25))}` : ''}</option>`; };
+  const r = await dialog({title: 'Etiquetas: ' + l.name, body: `
+    <label>Columna que se muestra en la etiqueta<select id="lbF"><option value="">— Sin etiquetas —</option>${opt('__name', 'Nombre')}${hasPoly ? opt('__area', 'Área (ha)') : ''}${fields.map(k => opt(k, k)).join('')}</select></label>
+    <label>Mostrar<select id="lbZ">${LBL_Z.map(([z, t]) => `<option value="${z}" ${(l.labelZoom ?? 15) === z ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+    <p class="mut">Con muchos puntos conviene mostrarlas solo de cerca, para que no se amontonen.</p>`,
+    buttons: [{label: 'Cancelar', value: null}, {label: 'Aplicar', cls: 'pri', value: d => ({label: d.querySelector('#lbF').value, labelZoom: +d.querySelector('#lbZ').value})}]});
+  if (!r) return openLayers();
+  Object.assign(l, r); await saveLayer(l); refreshLayer(l.id); updLblZoom();
+  if (r.label && map.getZoom() < r.labelZoom) toast(`Acércate (zoom ${r.labelZoom} o más) para ver las etiquetas`, 3500);
+  openLayers();
+}
 async function layerSettings(l) {
   const fs = [...S.features.values()].filter(f => f.layer === l.id);
   const fields = layerFields(l.id), hasPoly = fs.some(f => f.type === 'polygon');
@@ -550,10 +567,11 @@ async function layerSettings(l) {
       <label>Nombre de la capa<input id="lsN" value="${esc(l.name)}"></label>
       <label>Etiquetas en el mapa<select id="lsL">${opts(l.label || '', 'Sin etiquetas')}</select></label>
       <label>Colorear según<select id="lsS">${opts(l.styleBy || '', 'Un solo color')}</select></label>
-      <p class="mut">Si el campo es numérico (p. ej. % de infestación) se usa una escala de verde a rojo en 5 rangos; si es texto, un color por categoría. Las etiquetas aparecen desde zoom 15.</p>
+      <label>Mostrar etiquetas<select id="lsZ">${LBL_Z.map(([z, t]) => `<option value="${z}" ${(l.labelZoom ?? 15) === z ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      <p class="mut">Si el campo es numérico (p. ej. % de infestación) se usa una escala de verde a rojo en 5 rangos; si es texto, un color por categoría.</p>
       ${others.length ? `<label>Mover todos sus elementos a<select id="lsM"><option value="">— no mover —</option>${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label>` : ''}`,
     stack: true,
-    buttons: [{label: 'Guardar', cls: 'pri', value: d => ({name: d.querySelector('#lsN').value.trim() || l.name, label: d.querySelector('#lsL').value, styleBy: d.querySelector('#lsS').value, move: d.querySelector('#lsM')?.value || ''})},
+    buttons: [{label: 'Guardar', cls: 'pri', value: d => ({name: d.querySelector('#lsN').value.trim() || l.name, label: d.querySelector('#lsL').value, labelZoom: +d.querySelector('#lsZ').value, styleBy: d.querySelector('#lsS').value, move: d.querySelector('#lsM')?.value || ''})},
       {label: '★ Usar como capa activa', value: 'active'}, {label: l.id === 'mis-datos' ? 'Vaciar capa' : 'Eliminar capa', cls: 'dan', value: 'del'}, {label: 'Cancelar', value: null}]
   });
   if (!r) return;
@@ -565,7 +583,7 @@ async function layerSettings(l) {
     if (!own) { S.layers.delete(l.id); groups.get(l.id)?.remove(); groups.delete(l.id); await Store.del('layers', l.id).catch(() => {}); if (S.activeLayer === l.id) setActiveLayer('mis-datos'); }
     return openLayers();
   }
-  Object.assign(l, {name: r.name, label: r.label, styleBy: r.styleBy}); await saveLayer(l); refreshLayer(l.id);
+  Object.assign(l, {name: r.name, label: r.label, labelZoom: r.labelZoom, styleBy: r.styleBy}); await saveLayer(l); refreshLayer(l.id); updLblZoom();
   if (r.move) { fs.forEach(f => { f.layer = r.move; }); await addFeatures(fs); refreshLayer(r.move); toast(`${fs.length} elementos movidos`); }
   openLayers();
 }
@@ -754,7 +772,8 @@ async function addImportedLayer(name, feats, quiet) {
   await addFeatures(feats);
   closeSheet(); zoomTo(feats);
   const c = t => feats.filter(f => f.type === t).length;
-  toast(`${name}: ${c('point')} puntos, ${c('line')} líneas, ${c('polygon')} polígonos`, 4000);
+  const hasProps = feats.some(f => f.props && Object.keys(f.props).length);
+  toast(`${name}: ${c('point')} puntos, ${c('line')} líneas, ${c('polygon')} polígonos${hasProps ? '. Para etiquetarlos con una columna: Capas ▸ 🏷' : ''}`, 5000);
   return l;
 }
 $('#file').onchange = async e => {
