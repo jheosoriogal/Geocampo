@@ -572,9 +572,10 @@ async function layerSettings(l) {
       ${others.length ? `<label>Mover todos sus elementos a<select id="lsM"><option value="">— no mover —</option>${others.map(o => `<option value="${o.id}">${esc(o.name)}</option>`).join('')}</select></label>` : ''}`,
     stack: true,
     buttons: [{label: 'Guardar', cls: 'pri', value: d => ({name: d.querySelector('#lsN').value.trim() || l.name, label: d.querySelector('#lsL').value, labelZoom: +d.querySelector('#lsZ').value, styleBy: d.querySelector('#lsS').value, move: d.querySelector('#lsM')?.value || ''})},
-      {label: '★ Usar como capa activa', value: 'active'}, {label: l.id === 'mis-datos' ? 'Vaciar capa' : 'Eliminar capa', cls: 'dan', value: 'del'}, {label: 'Cancelar', value: null}]
+      {label: '📄 Reporte PDF de la capa', value: 'report'}, {label: '★ Usar como capa activa', value: 'active'}, {label: l.id === 'mis-datos' ? 'Vaciar capa' : 'Eliminar capa', cls: 'dan', value: 'del'}, {label: 'Cancelar', value: null}]
   });
   if (!r) return;
+  if (r === 'report') { closeSheet(); return layerReportDlg(l); }
   if (r === 'active') { setActiveLayer(l.id); toast(`Capa activa: ${l.name}`); return openLayers(); }
   if (r === 'del') {
     const own = l.id === 'mis-datos';

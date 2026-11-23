@@ -44,6 +44,18 @@ async function mapSnapshot(fs, W, H, opts = {}) {
       f.coords.forEach((cc, i) => { const [x, y] = P(cc); g.fillStyle = '#fff'; g.beginPath(); g.arc(x, y, W / 90, 0, 7); g.fill(); g.strokeStyle = col; g.lineWidth = 2; g.stroke(); g.fillStyle = '#1a202c'; g.fillText(String(i + 1), x, y + 1); });
     }
   }
+  if (opts.labels) {
+    const fz = Math.round(W / 85); g.font = `bold ${fz}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const f of fs) {
+      const n = opts.labels.get(f.id); if (n == null) continue;
+      const c_ = f.type === 'point' ? f.coords[0] : centroidOf(f); let [x, y] = P(c_);
+      if (f.type === 'point') y -= fz * 1.25;
+      const t = String(n), w = g.measureText(t).width + fz * .7;
+      g.fillStyle = 'rgba(255,255,255,.92)'; g.strokeStyle = '#1a202c'; g.lineWidth = 1.2;
+      g.beginPath(); g.rect(x - w / 2, y - fz * .7, w, fz * 1.4); g.fill(); g.stroke();
+      g.fillStyle = '#1a202c'; g.fillText(t, x, y + 1);
+    }
+  }
   // escala gráfica y norte
   const lat = bb.getCenter().lat, mpp = 40075016.686 * Math.cos(lat * Math.PI / 180) / 2 ** (z + 8);
   const target = W / 5 * mpp, pw = 10 ** Math.floor(Math.log10(target)), nice = [1, 2, 5, 10].map(v => v * pw).filter(v => v <= target).pop() || pw, bl = nice / mpp;
@@ -147,3 +159,145 @@ async function buildReport(f, o) {
 }
 function blobToDataURL(b) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); }); }
 INFO_ACTIONS.push({label: '📄 Reporte PDF', when: () => true, run: reportDlg});
+
+/* =====================================================================
+   Reporte PDF de toda una capa (p. ej. todas las trampas de una visita)
+   ===================================================================== */
+const fTime = f => f.coords?.[0]?.[3] || null;   // fecha y hora de captura en campo
+async function layerReportDlg(l) {
+  const fs = [...S.features.values()].filter(f => f.layer === l.id);
+  if (!fs.length) return toast('La capa está vacía');
+  const fields = layerFields(l.id), pre = new Set([l.label, l.styleBy].filter(k => k && fields.includes(k)));
+  const nPh = fs.reduce((s, f) => s + (f.photos?.length || 0), 0), noT = fs.filter(f => !fTime(f)).length;
+  const r = await dialog({title: 'Reporte PDF de la capa', body: `<p class="mut">“${esc(l.name)}”: ${fs.length} elementos. Incluye mapa general numerado, resumen y una tabla con la fecha y hora en que se tomó cada elemento en campo.</p>
+    <label>Elaborado por<input id="lrA" value="${esc(S.settings.reportAuthor || '')}" placeholder="Nombre y entidad"></label>
+    <label>Ordenar por<select id="lrO"><option value="time">Fecha y hora de captura</option><option value="name">Nombre</option></select></label>
+    ${fields.length ? `<div class="mut" style="margin-top:8px">Columnas de atributos a incluir en la tabla (máx. 4):</div><div style="display:flex;flex-wrap:wrap;gap:4px 14px;margin:4px 0">${fields.map(k => `<label style="margin:2px 0;color:var(--tx);display:flex;gap:6px;align-items:center"><input type="checkbox" class="lrF" value="${esc(k)}" ${pre.has(k) ? 'checked' : ''} style="width:auto;margin:0">${esc(k)}</label>`).join('')}</div>` : ''}
+    <label>Coordenadas<select id="lrC"><option value="en">Origen Nacional (Este / Norte)</option><option value="both">Origen Nacional + latitud / longitud</option></select></label>
+    <label>Fotos<select id="lrF"><option value="1" ${nPh ? '' : 'disabled'}>Incluir (${nPh})</option><option value="0" ${nPh ? '' : 'selected'}>No incluir</option></select></label>
+    ${noT ? `<p class="mut">${noT} elemento(s) no tienen fecha de captura (por ejemplo, los importados de un archivo); aparecerán con “—”.</p>` : ''}`,
+    buttons: [{label: 'Cancelar', value: null}, {label: 'Generar', cls: 'pri', value: d => {
+      const cols = [...d.querySelectorAll('.lrF:checked')].map(x => x.value);
+      if (cols.length > 4) { toast('Elige máximo 4 columnas'); return; }
+      return {author: d.querySelector('#lrA').value.trim(), order: d.querySelector('#lrO').value, cols, ll: d.querySelector('#lrC').value === 'both', photos: d.querySelector('#lrF').value === '1'};
+    }}]});
+  if (!r) return;
+  S.settings.reportAuthor = r.author; Store.set('settings', S.settings);
+  let blob;
+  try { toast('Generando reporte de la capa…', 5000); blob = await buildLayerReport(l, fs, r); }
+  catch (e) { return dialog({title: 'No se pudo generar', body: `<p>${esc(e.message || e)}</p>`}); }
+  const name = `Reporte_capa_${String(l.name).replace(/\.[^.]+$/, '').replace(/[^\w\-áéíóúñÁÉÍÓÚÑ]+/g, '_')}_${new Date().toISOString().slice(0, 10)}.pdf`;
+  const a = await dialog({title: 'Reporte listo', body: `<p>${esc(name)}</p>`, buttons: [{label: 'Compartir', value: 'share'}, {label: 'Guardar', value: 'dl', cls: 'pri'}]});
+  if (a === 'share') shareFile(blob, name); else if (a === 'dl') download(blob, name);
+}
+
+/* Tabla con ajuste de texto, saltos de página y encabezado repetido */
+function pdfTable(doc, ctx, cols, rows) {
+  const M = 14, fsz = 7.6, lh = 3.3;
+  const drawHead = () => {
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(fsz);
+    const h = Math.max(...cols.map(c => doc.splitTextToSize(c.h, c.w - 2).length)) * lh + 2.4;
+    doc.setFillColor(226, 232, 240); doc.rect(M, ctx.y, cols.reduce((s, c) => s + c.w, 0), h, 'F');
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(fsz); let x = M;
+    cols.forEach(c => { doc.text(doc.splitTextToSize(c.h, c.w - 2), c.al === 'r' ? x + c.w - 1 : x + 1, ctx.y + 3.4, {align: c.al === 'r' ? 'right' : 'left'}); x += c.w; });
+    ctx.y += h;
+  };
+  ctx.need(14); drawHead();
+  rows.forEach((row, i) => {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(fsz);
+    const lines = row.map((v, j) => doc.splitTextToSize(String(v ?? ''), cols[j].w - 2));
+    const h = Math.max(...lines.map(l => l.length)) * lh + 2;
+    if (ctx.y + h > ctx.limit) { ctx.need(999); drawHead(); doc.setFont('helvetica', 'normal'); doc.setFontSize(fsz); }
+    if (i % 2) { doc.setFillColor(247, 250, 252); doc.rect(M, ctx.y, cols.reduce((s, c) => s + c.w, 0), h, 'F'); }
+    let x = M; lines.forEach((ln, j) => { const c = cols[j]; doc.text(ln, c.al === 'r' ? x + c.w - 1 : x + 1, ctx.y + 3.3, {align: c.al === 'r' ? 'right' : 'left'}); x += c.w; });
+    ctx.y += h;
+  });
+  ctx.y += 3;
+}
+const fmtT = t => t ? fmtDT(t) : '—';
+async function buildLayerReport(l, fs, o) {
+  // hoja horizontal si la tabla de puntos no cabe a lo alto (lat/lon + varias columnas de atributos)
+  const needW = 8 + 22 + 29 + 40 + (o.ll ? 34 : 0) + 11 + o.cols.length * 22;
+  const wide = needW > 182;
+  const {jsPDF} = window.jspdf, doc = new jsPDF({unit: 'mm', format: 'a4', orientation: wide ? 'landscape' : 'portrait'});
+  const PW = wide ? 297 : 210, PH = wide ? 210 : 297, M = 14, CW = PW - 2 * M, now = new Date();
+  const hdr = () => { doc.setFillColor(31, 95, 58); doc.rect(0, 0, PW, 9, 'F'); doc.setTextColor(255); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold'); doc.text('GeoCampo — Reporte de capa', M, 6); doc.setFont('helvetica', 'normal'); doc.text(now.toLocaleString('es-CO'), PW - M, 6, {align: 'right'}); doc.setTextColor(26, 32, 44); };
+  const ctx = {y: 18, limit: PH - 14}; ctx.need = h => { if (ctx.y + h > ctx.limit) { doc.addPage(); hdr(); ctx.y = 16; } };
+  const title = t => { ctx.need(16); doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text(t, M, ctx.y + 5); ctx.y += 8; };
+  // orden y numeración
+  const sorted = [...fs].sort(o.order === 'name' ? (a, b) => String(a.name).localeCompare(String(b.name), 'es', {numeric: true}) : (a, b) => (fTime(a) || Infinity) - (fTime(b) || Infinity));
+  const num = new Map(sorted.map((f, i) => [f.id, i + 1]));
+  hdr();
+  doc.setFontSize(17); doc.setFont('helvetica', 'bold'); doc.text(doc.splitTextToSize(l.name, CW), M, ctx.y); ctx.y += 7;
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor(90, 100, 114);
+  doc.text(`Reporte de capa${o.author ? ' · Elaborado por: ' + o.author : ''}`, M, ctx.y); doc.setTextColor(26, 32, 44); ctx.y += 5;
+  const MH = wide ? 960 : 1150;
+  const snap = await mapSnapshot(sorted, 1600, MH, {labels: sorted.length <= 400 ? num : null});
+  if (snap) { const h = CW * MH / 1600; doc.addImage(snap.canvas.toDataURL('image/jpeg', .85), 'JPEG', M, ctx.y, CW, h); doc.setDrawColor(200); doc.rect(M, ctx.y, CW, h); ctx.y += h + 2; if (snap.missing) { doc.setFontSize(8); doc.text('Sin mapa base: no había internet ni zona descargada.', M, ctx.y + 2); ctx.y += 3; } }
+  // resumen
+  const pts = sorted.filter(f => f.type === 'point'), pol = sorted.filter(f => f.type === 'polygon'), lin = sorted.filter(f => f.type === 'line');
+  const ts = sorted.map(fTime).filter(Boolean);
+  const rows = [['Elementos', [pts.length && `${pts.length} puntos`, pol.length && `${pol.length} polígonos`, lin.length && `${lin.length} líneas/tracks`].filter(Boolean).join(' · ')]];
+  if (pol.length) rows.push(['Área total de polígonos', `${fmt(pol.reduce((s, f) => s + fArea(f), 0) / 1e4, 4)} ha`]);
+  if (lin.length) rows.push(['Longitud total de líneas', fmtLen(lin.reduce((s, f) => s + lengthM(f.coords), 0))]);
+  if (ts.length) rows.push(['Captura en campo', ts.length > 1 ? `desde ${fmtDT(Math.min(...ts))} hasta ${fmtDT(Math.max(...ts))}` : fmtDT(ts[0])]);
+  if (ts.length < sorted.length) rows.push(['Sin fecha de captura', `${sorted.length - ts.length} elemento(s) (importados de un archivo)`]);
+  const nPh = sorted.reduce((s, f) => s + (f.photos?.length || 0), 0); if (nPh) rows.push(['Fotos', String(nPh)]);
+  ctx.need(rows.length * 6.5 + 12); ctx.y += 3; doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.text('Resumen', M, ctx.y); ctx.y += 2; doc.setFontSize(9.5);
+  rows.forEach(([k, v], i) => { ctx.need(6.5); if (i % 2 === 0) { doc.setFillColor(247, 250, 252); doc.rect(M, ctx.y, CW, 6.5, 'F'); } doc.setFont('helvetica', 'bold'); doc.text(k, M + 2, ctx.y + 4.4); doc.setFont('helvetica', 'normal'); doc.text(v, M + 52, ctx.y + 4.4); ctx.y += 6.5; });
+  ctx.y += 2;
+  // columnas de atributos: reparten el ancho sobrante
+  const attrCols = (used) => { const w = o.cols.length ? Math.max(16, (CW - used) / o.cols.length) : 0; return o.cols.map(k => ({h: k, w, flex: true})); };
+  const attrVals = f => o.cols.map(k => f.props?.[k] ?? '');
+  const fitW = cols => {
+    const tot = cols.reduce((s, c) => s + c.w, 0); if (tot <= CW) return cols;
+    const flex = cols.filter(c => c.flex), fixed = tot - flex.reduce((s, c) => s + c.w, 0), k = Math.max(.4, (CW - fixed) / (tot - fixed));
+    flex.forEach(c => c.w *= k);
+    const t2 = cols.reduce((s, c) => s + c.w, 0); if (t2 > CW) cols.forEach(c => c.w *= CW / t2);
+    return cols;
+  };
+  if (pts.length) {
+    title(`Puntos (${pts.length})`);
+    const base = [{h: 'N°', w: 8, al: 'r'}, {h: 'Nombre', w: 30, flex: true}, {h: 'Fecha y hora de captura', w: 29}, {h: 'Este (m)', w: 20, al: 'r'}, {h: 'Norte (m)', w: 20, al: 'r'}];
+    if (o.ll) base.push({h: 'Latitud', w: 16, al: 'r'}, {h: 'Longitud', w: 18, al: 'r'});
+    base.push({h: 'Prec. (m)', w: 11, al: 'r'});
+    const cols = fitW([...base, ...attrCols(base.reduce((s, c) => s + c.w, 0))]);
+    pdfTable(doc, ctx, cols, pts.map(f => { const [lat, lon] = f.coords[0], {e, n} = toCTM(lat, lon); return [num.get(f.id), f.name, fmtT(fTime(f)), fmt(e, 2), fmt(n, 2), ...(o.ll ? [lat.toFixed(6), lon.toFixed(6)] : []), f.acc ? fmt(f.acc, 1) : '', ...attrVals(f)]; }));
+  }
+  if (pol.length) {
+    title(`Polígonos (${pol.length})`);
+    const base = [{h: 'N°', w: 8, al: 'r'}, {h: 'Nombre', w: 34, flex: true}, {h: 'Fecha y hora de captura', w: 29}, {h: 'Área (ha)', w: 18, al: 'r'}, {h: 'Perímetro (m)', w: 20, al: 'r'}, {h: 'Vértices', w: 13, al: 'r'}];
+    const cols = fitW([...base, ...attrCols(base.reduce((s, c) => s + c.w, 0))]);
+    pdfTable(doc, ctx, cols, pol.map(f => [num.get(f.id), f.name, fmtT(fTime(f)), fmt(fArea(f) / 1e4, 4), fmt(fPerim(f), 1), f.coords.length, ...attrVals(f)]));
+  }
+  if (lin.length) {
+    title(`Líneas / tracks (${lin.length})`);
+    const base = [{h: 'N°', w: 8, al: 'r'}, {h: 'Nombre', w: 34, flex: true}, {h: 'Inicio', w: 29}, {h: 'Fin', w: 29}, {h: 'Longitud (m)', w: 20, al: 'r'}];
+    const cols = fitW([...base, ...attrCols(base.reduce((s, c) => s + c.w, 0))]);
+    pdfTable(doc, ctx, cols, lin.map(f => [num.get(f.id), f.name, fmtT(fTime(f)), fmtT(f.coords[f.coords.length - 1][3]), fmt(lengthM(f.coords), 1), ...attrVals(f)]));
+  }
+  doc.setFontSize(7.5); doc.setTextColor(90, 100, 114); ctx.need(6); doc.text('Fecha y hora tomadas del GPS/celular al momento de la captura. Coordenadas planas en MAGNA-SIRGAS Origen Nacional (EPSG:9377).', M, ctx.y + 2); doc.setTextColor(26, 32, 44); ctx.y += 6;
+  // fotos
+  if (o.photos) {
+    const ids = sorted.flatMap(f => (f.photos || []).map(id => ({id, f})));
+    if (ids.length) {
+      const w = (CW - 6) / 2, r0 = await Store.getIn('photos', ids[0].id).catch(() => null);
+      ctx.need(16 + (r0 ? w * r0.h / r0.w + 12 : 0));
+      title(`Registro fotográfico (${ids.length})`);
+      for (let i = 0; i < ids.length; i++) {
+        const rec = await Store.getIn('photos', ids[i].id).catch(() => null); if (!rec) continue;
+        const h = w * rec.h / rec.w, col = i % 2;
+        if (col === 0) ctx.need(h + 12);
+        const x = M + col * (w + 6);
+        doc.addImage(await blobToDataURL(rec.blob), 'JPEG', x, ctx.y, w, h);
+        const {e, n} = toCTM(rec.lat, rec.lon);
+        doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+        doc.text(doc.splitTextToSize(`N° ${num.get(ids[i].f.id)} · ${ids[i].f.name} · ${fmtDT(rec.t)} · E ${fmt(e, 1)} N ${fmt(n, 1)}`, w), x, ctx.y + h + 3.5);
+        if (col === 1 || i === ids.length - 1) ctx.y += h + 10;
+      }
+    }
+  }
+  const np = doc.getNumberOfPages();
+  for (let i = 1; i <= np; i++) { doc.setPage(i); doc.setFontSize(7.5); doc.setTextColor(120); doc.text(`Página ${i} de ${np} · Generado con GeoCampo`, PW / 2, PH - 5, {align: 'center'}); }
+  return doc.output('blob');
+}
