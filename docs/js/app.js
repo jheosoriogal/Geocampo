@@ -24,7 +24,7 @@ proj4.defs('EPSG:3116', '+proj=tmerc +lat_0=4.596200416666666 +lon_0=-74.0775079
 [['3114', -80.07750791666666], ['3115', -77.07750791666666], ['3117', -71.07750791666666], ['3118', -68.07750791666666]].forEach(([c, lon]) => proj4.defs('EPSG:' + c, `+proj=tmerc +lat_0=4.596200416666666 +lon_0=${lon} +k=1 +x_0=1000000 +y_0=1000000 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs`));
 [17, 18, 19].forEach(z => proj4.defs('EPSG:326' + z, `+proj=utm +zone=${z} +datum=WGS84 +units=m +no_defs`));
 proj4.defs('EPSG:4686', proj4.defs('EPSG:4326'));
-const CRS = {'EPSG:4326': 'WGS84 — latitud / longitud (grados)', 'EPSG:9377': 'MAGNA-SIRGAS Origen-Nacional / CTM12 (9377)', 'EPSG:3116': 'MAGNA-SIRGAS Colombia Bogotá (3116)'};
+const CRS = {'EPSG:4326': 'WGS84 — latitud / longitud (grados)', 'EPSG:9377': 'MAGNA-SIRGAS Origen Nacional (9377)', 'EPSG:3116': 'MAGNA-SIRGAS Colombia Bogotá (3116)'};
 function toCTM(lat, lon) { const [e, n] = proj4('EPSG:4326', 'EPSG:9377', [lon, lat]); return {e, n}; }
 function dms(v, pos, neg) {
   const s = v < 0 ? neg : pos; v = Math.abs(v);
@@ -288,7 +288,7 @@ function updateGpsPanel() {
   const cls = p.acc <= 5 ? 'good' : p.acc <= S.settings.maxAcc ? 'mid' : 'bad';
   const {e, n} = toCTM(p.lat, p.lon);
   const ll = S.dms ? `${dms(p.lat, 'N', 'S')} ${dms(p.lon, 'E', 'O')}` : `${p.lat.toFixed(6)}, ${p.lon.toFixed(6)}`;
-  $('#gps').innerHTML = `<div>${ll} <span class="acc ${cls}">±${fmt(p.acc, 1)} m</span></div><div class="mut">CTM12 E ${fmt(e, 1)} · N ${fmt(n, 1)}${p.alt != null ? ` · Alt. GPS ${fmt(p.alt, 0)} m` : ''}</div>`;
+  $('#gps').innerHTML = `<div>${ll} <span class="acc ${cls}">±${fmt(p.acc, 1)} m</span></div><div class="mut">Origen Nacional E ${fmt(e, 1)} · N ${fmt(n, 1)}${p.alt != null ? ` · Alt. GPS ${fmt(p.alt, 0)} m` : ''}</div>`;
 }
 function averageGPS(secs) {
   return new Promise(resolve => {
@@ -463,7 +463,7 @@ map.on('click', e => { if (S.rec && S.rec.mode === 'tap') addVertex([e.latlng.la
 function statsHtml(f) {
   if (f.type === 'point') {
     const [lat, lon, alt] = f.coords[0], {e, n} = toCTM(lat, lon);
-    return `<table class="kv"><tr><td>Latitud</td><td>${lat.toFixed(7)}<br><span class="mut">${dms(lat, 'N', 'S')}</span></td></tr><tr><td>Longitud</td><td>${lon.toFixed(7)}<br><span class="mut">${dms(lon, 'E', 'O')}</span></td></tr><tr><td>CTM12 (EPSG:9377)</td><td>E ${fmt(e, 2)}<br>N ${fmt(n, 2)}</td></tr>${alt != null ? `<tr><td>Altitud GPS</td><td>${fmt(alt, 1)} m</td></tr>` : ''}${f.acc ? `<tr><td>Precisión</td><td>±${fmt(f.acc, 1)} m${f.n ? ` (promedio de ${f.n} lecturas)` : ''}</td></tr>` : ''}${f.src === 'mapa' ? '<tr><td>Origen</td><td>Marcado en el mapa</td></tr>' : ''}</table>`;
+    return `<table class="kv"><tr><td>Latitud</td><td>${lat.toFixed(7)}<br><span class="mut">${dms(lat, 'N', 'S')}</span></td></tr><tr><td>Longitud</td><td>${lon.toFixed(7)}<br><span class="mut">${dms(lon, 'E', 'O')}</span></td></tr><tr><td>Origen Nacional (9377)</td><td>E ${fmt(e, 2)}<br>N ${fmt(n, 2)}</td></tr>${alt != null ? `<tr><td>Altitud GPS</td><td>${fmt(alt, 1)} m</td></tr>` : ''}${f.acc ? `<tr><td>Precisión</td><td>±${fmt(f.acc, 1)} m${f.n ? ` (promedio de ${f.n} lecturas)` : ''}</td></tr>` : ''}${f.src === 'mapa' ? '<tr><td>Origen</td><td>Marcado en el mapa</td></tr>' : ''}</table>`;
   }
   if (f.type === 'polygon') {
     const a = fArea(f);
@@ -478,14 +478,14 @@ const INFO_ACTIONS = [];   // {label, when(f), run(f)}
 const INFO_EXTRA = [];     // (f, sheet) => html | Promise
 function propsHtml(f) {
   const e = Object.entries(f.props || {}).filter(([, v]) => v != null && v !== '');
-  return e.length ? `<details class="props" open><summary>Información del archivo (${e.length} columnas)</summary><table class="kv">${e.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></details>` : '';
+  return e.length ? `<details class="props"><summary>Atributos (${e.length})</summary><table class="kv">${e.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></details>` : '';
 }
 function showInfo(id) {
   const f = S.features.get(id); if (!f) return;
   const ly = S.layers.get(f.layer);
   const sh = openSheet(`<div class="mut"><span class="sw" style="background:${colorOf(f)}"></span> ${TYPE[f.type]} · ${esc(ly?.name || '')}</div>
-    <label>Nombre<input id="fName" value="${esc(f.name)}"></label>${propsHtml(f)}${statsHtml(f)}
-    <label>Descripción<textarea id="fDesc" rows="3">${esc(f.desc || '')}</textarea></label><div id="fExtra"></div>
+    <label>Nombre<input id="fName" value="${esc(f.name)}"></label>${statsHtml(f)}
+    <label>Descripción<textarea id="fDesc" rows="3">${esc(f.desc || '')}</textarea></label>${propsHtml(f)}<div id="fExtra"></div>
     <div class="row">${INFO_ACTIONS.map((a, i) => a.when(f) ? `<button class="btn" data-ia="${i}">${a.label}</button>` : '').join('')}</div>
     <div class="row"><button class="btn pri" id="fSave">Guardar</button><button class="btn" id="fZoom">Ver en mapa</button><button class="btn" id="fCopy">Copiar</button>${f.type === 'line' ? '<button class="btn" id="fClose">Convertir a polígono</button>' : ''}<button class="btn dan" id="fDel">Eliminar</button></div>`);
   sh.querySelectorAll('[data-ia]').forEach(b => b.onclick = () => INFO_ACTIONS[+b.dataset.ia].run(f));
@@ -494,7 +494,7 @@ function showInfo(id) {
   sh.querySelector('#fZoom').onclick = () => { closeSheet(); zoomTo([f]); };
   sh.querySelector('#fCopy').onclick = async () => {
     let t;
-    if (f.type === 'point') { const {e, n} = toCTM(f.coords[0][0], f.coords[0][1]); t = `${f.name}: ${f.coords[0][0].toFixed(7)}, ${f.coords[0][1].toFixed(7)} (CTM12 E ${e.toFixed(2)} N ${n.toFixed(2)})`; }
+    if (f.type === 'point') { const {e, n} = toCTM(f.coords[0][0], f.coords[0][1]); t = `${f.name}: ${f.coords[0][0].toFixed(7)}, ${f.coords[0][1].toFixed(7)} (Origen Nacional E ${e.toFixed(2)} N ${n.toFixed(2)})`; }
     else if (f.type === 'polygon') t = `${f.name}: ${(fArea(f) / 1e4).toFixed(4)} ha, perímetro ${fPerim(f).toFixed(1)} m`;
     else t = `${f.name}: ${lengthM(f.coords).toFixed(1)} m`;
     try { await navigator.clipboard.writeText(t); toast('Copiado'); } catch (e) { toast(t, 6000); }
@@ -826,7 +826,7 @@ function toCSV(fs, sep, dec) {
   const n = (v, d) => v == null || !isFinite(v) ? '' : v.toFixed(d).replace('.', dec);
   const q = v => { v = String(v ?? ''); return /["\n\r]/.test(v) || v.includes(sep) ? `"${v.replace(/"/g, '""')}"` : v; };
   const pk = [...new Set(fs.flatMap(f => Object.keys(f.props || {})))];
-  const out = [['capa', 'nombre', 'tipo', 'anillo', 'vertice', 'latitud', 'longitud', 'altitud_m', 'este_ctm12', 'norte_ctm12', 'area_ha', 'perimetro_m', 'longitud_m', 'precision_m', 'fecha_hora', 'descripcion', 'fotos', ...pk].map(q).join(sep)];
+  const out = [['capa', 'nombre', 'tipo', 'anillo', 'vertice', 'latitud', 'longitud', 'altitud_m', 'este_9377', 'norte_9377', 'area_ha', 'perimetro_m', 'longitud_m', 'precision_m', 'fecha_hora', 'descripcion', 'fotos', ...pk].map(q).join(sep)];
   fs.forEach(f => {
     const m = metrics(f), ly = S.layers.get(f.layer)?.name || '';
     const rings = [['exterior', f.coords], ...(f.holes || []).map((h, i) => [`hueco ${i + 1}`, h])];
@@ -935,7 +935,7 @@ function openMore() {
     <p><b>Ficha de un elemento:</b> Ir aquí (flecha y distancia), Editar vértices, Recortar hueco, Buffer / retiro y Reporte PDF.</p>
     <p><b>Capas:</b> ★ marca la capa activa (donde se guarda lo nuevo); crea una por finca o visita. Con ⚙ eliges etiquetas y colores por atributo.</p>
     <p><b>Sin internet:</b> en Archivos ▸ Mapas sin conexión descarga la zona antes de salir. Puedes cargar mapas propios: PDF georreferenciado, GeoTIFF, JPG/PNG con su .jgw/.pgw (selecciónalos juntos) o KMZ con imagen.</p>
-    <p><b>Coordenadas:</b> WGS84 y MAGNA-SIRGAS Origen-Nacional (CTM12, EPSG:9377). Toca el recuadro superior para ver grados-minutos-segundos.</p>
+    <p><b>Coordenadas:</b> WGS84 y MAGNA-SIRGAS Origen Nacional (EPSG:9377). Toca el recuadro superior para ver grados-minutos-segundos.</p>
     ${CAP ? '<p><b>Grabar con pantalla apagada:</b> al iniciar un track o polígono con GPS aparece una notificación “GeoCampo está grabando”; mientras esté, puedes apagar la pantalla o guardar el celular. Si el celular tiene ahorro de batería agresivo, excluye a GeoCampo en Ajustes ▸ Batería.</p>' : '<p><b>Importante:</b> en la versión web deja la pantalla encendida mientras grabas; Android pausa el GPS de las páginas web con la pantalla apagada. La app instalada (APK) no tiene esta limitación.</p>'}
     <p class="mut">Tus datos se guardan solo en este celular. Exporta con frecuencia como respaldo.</p>`}); };
 }
