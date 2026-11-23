@@ -1,10 +1,12 @@
 // GeoCampo — service worker: app disponible sin internet y caché de mosaicos ya vistos
-const APP = 'geocampo-app-v2';
-const TILES = 'geocampo-tiles-v1';
+const APP = 'geocampo2-app-v1';
+const TILES = 'geocampo2-tiles-v1';
 const MAX_TILES = 4000;
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   './vendor/leaflet.js', './vendor/leaflet.css', './vendor/proj4.js', './vendor/jszip.min.js', './vendor/capacitor.js',
-  './vendor/images/layers.png', './vendor/images/layers-2x.png'];
+  './vendor/turf.min.js', './vendor/piexif.js', './vendor/shp.min.js', './vendor/shpwrite.js', './vendor/jspdf.umd.min.js',
+  './vendor/geotiff.js', './vendor/pdf.min.js', './vendor/pdf.worker.min.js', './vendor/images/layers.png', './vendor/images/layers-2x.png',
+  './js/app.js', './js/offline.js', './js/photos.js', './js/nav.js', './js/edit.js', './js/georef.js', './js/report.js', './js/main.js'];
 const TILE_HOSTS = ['arcgisonline.com', 'tile.openstreetmap.org', 'tile.opentopomap.org'];
 
 self.addEventListener('install', e => {

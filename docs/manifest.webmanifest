@@ -1,6 +1,6 @@
 {
-  "name": "GeoCampo — captura GPS en campo",
-  "short_name": "GeoCampo",
+  "name": "GeoCampo 2 — captura GPS en campo",
+  "short_name": "GeoCampo 2",
   "description": "Puntos, tracks y polígonos con GPS; área en hectáreas; importa y exporta KML, KMZ, GPX, CSV y GeoJSON.",
   "lang": "es",
   "start_url": "./",

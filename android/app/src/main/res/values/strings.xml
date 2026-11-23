@@ -1,9 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">GeoCampo</string>
-    <string name="title_activity_main">GeoCampo</string>
-    <string name="package_name">co.geocampo.app</string>
-    <string name="custom_url_scheme">co.geocampo.app</string>
+    <string name="app_name">GeoCampo 2</string>
+    <string name="title_activity_main">GeoCampo 2</string>
+    <string name="package_name">co.geocampo.app2</string>
+    <string name="custom_url_scheme">co.geocampo.app2</string>
     <string name="capacitor_background_geolocation_notification_channel_name">Grabación GPS</string>
     <string name="capacitor_background_geolocation_notification_icon">drawable/ic_tracking</string>
 </resources>

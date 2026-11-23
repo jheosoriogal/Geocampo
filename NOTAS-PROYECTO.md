@@ -1,41 +1,48 @@
 # GeoCampo: notas para retomar el proyecto
 
 **Dueño:** Jhon (GitHub `jheosoriogal`). App tipo Avenza Maps para uso personal en campo (Android).
-**Descarga del APK:** https://github.com/jheosoriogal/Geocampo/releases/latest
-**Estado:** versión 0.2.3 (20-nov-2026), probada en campo con un polígono pequeño. Funciona bien.
 
-## Arquitectura
-- `docs/index.html` contiene **toda la app**: HTML, CSS y JS en un solo archivo, con Leaflet, proj4 y JSZip en `docs/vendor/`.
-  - La misma carpeta sirve como app web (PWA, `sw.js`) y como contenido del APK.
-- Capacitor 7 (`capacitor.config.json`, webDir `docs`, `useLegacyBridge: true`). Plugins:
-  - `@capacitor-community/background-geolocation` 1.3.1: GPS con servicio en primer plano para grabar con la pantalla apagada.
-  - `@capacitor/filesystem`, `@capacitor/share`, `@capacitor/app` (botón Atrás) y `@capacitor/local-notifications` (permiso de notificaciones).
-- El JS detecta la APK con `CAP` (`capacitorExports.Capacitor.isNativePlatform()`) y obtiene los plugins con `registerPlugin`.
-- `.github/workflows/compilar-apk.yml` hace `npm ci`, `cap sync` y `gradlew assembleRelease`, y publica el resultado en Releases.
-  - El número de versión sale de `GITHUB_RUN_NUMBER`.
-  - El APK se firma con `android/app/geocampo.keystore` (clave `geocampo123`), una clave fija que permite instalar cada versión encima de la anterior. Solo sirve para uso personal; **no** sirve para Play Store.
-- Datos guardados en IndexedDB (`geocampo`: features, layers, kv) **solo en el celular**.
+## Dos versiones en este repositorio
+| | GeoCampo (original) | GeoCampo 2 |
+|---|---|---|
+| Rama | `main`, **no se modifica** | `geocampo2` |
+| App Android | `co.geocampo.app`, nombre "GeoCampo" | `co.geocampo.app2`, nombre "GeoCampo 2" |
+| Descarga | Releases → la marcada como *Latest* (v0.2.x) | Releases → *Pre-release* v2.0.x |
 
-## Funciones actuales
-- **Puntos:** GPS directo, GPS promediado N segundos o centro del mapa (cruz).
-- **Track y polígono**, en tres modos:
-  - GPS automático, con criterio de distancia, tiempo o ambos (`settings.captureBy`) y botón ⚙ en el panel de grabación.
-  - Vértice a vértice con GPS.
-  - Dibujando sobre el mapa.
-- **Área** geodésica (proyección TM local) en ha y m², perímetro y longitud.
-- **Coordenadas:** WGS84 (decimal o GMS) y MAGNA-SIRGAS Origen-Nacional / CTM12 (EPSG:9377).
-- **Importar:** KML, KMZ, GPX y GeoJSON. CSV con asistente de columnas: separador `;` o `,`, coma decimal, GMS, sistemas 4326, 9377 y 3116, y polígonos agrupados por columna.
-- **Exportar:** KML, KMZ, GPX, GeoJSON, CSV para QGIS y CSV para Excel en español.
-  - En la APK, **Descargar** guarda en Documentos/GeoCampo y **Compartir** abre el menú de compartir de Android.
-- **Capas por archivo:** color, visibilidad, zoom y suma de hectáreas. Un registro sin terminar se recupera si la app se cierra.
+Las dos se instalan a la vez en el celular y sus datos están separados. Para pasar datos de una a otra: exportar en una (KML/GeoJSON) e importar en la otra.
 
-## Pendientes ofrecidos (Jhon no ha decidido el orden)
-1. Editar vértices de polígonos ya guardados.
-2. Cargar PDF o imágenes georreferenciadas (como Avenza).
-3. Descargar el mapa base de una zona para usarlo sin señal.
-4. Cambiar la etiqueta "CTM12" por "Origen Nacional" (opcional).
-5. Play Store, aplazado. Requiere target API 36 (migrar a Capacitor 8), AAB firmado con clave privada, aviso de ubicación dentro de la app, política de privacidad, declaraciones de ubicación y de servicio en primer plano (con video) y 12 testers durante 14 días si la cuenta es personal.
+## Arquitectura (GeoCampo 2)
+- `docs/index.html` es la interfaz. El código está en `docs/js/`, en archivos de script normales que comparten variables globales y se cargan en este orden:
+  - `app.js` (núcleo: mapa, GPS, captura, capas, importar y exportar)
+  - `offline.js` (mapas sin conexión)
+  - `photos.js` (fotos)
+  - `nav.js` (ir a, coordenada, medir)
+  - `edit.js` (vértices, huecos, buffer)
+  - `georef.js` (PDF, GeoTIFF, world file, KMZ con imagen, shapefile)
+  - `report.js` (reporte PDF)
+  - `main.js` (arranque)
+- Puntos de extensión del núcleo, donde los módulos se registran: `INFO_ACTIONS`, `INFO_EXTRA`, `IMPORTERS`, `EXPORTERS`, `MORE_ITEMS`, `LAYER_TOOLS`, `KML_EXTRA` e `INIT_HOOKS`. También `S.tapHook` y `S.backHook`.
+- Modelo de cada elemento: `{id, layer, type: point|line|polygon, name, desc, coords: [[lat, lon, alt, t]], holes?: [ring], props?: {}, photos?: [id], acc?}`.
+- IndexedDB `geocampo`, versión 2, con los almacenes `features`, `layers`, `kv`, `photos` (imagen + miniatura), `tiles` (mosaicos sin conexión, clave `base/z/x/y`) y `overlays` (mapas georreferenciados: imagen + 4 esquinas).
+- Librerías en `docs/vendor/`: Leaflet, proj4, JSZip, Turf, piexif, shpjs, shp-write (compilado con esbuild desde `@mapbox/shp-write` 0.4.3 porque el bundle publicado no admite `.prj`), jsPDF, geotiff.js y pdf.js 3.11.
+- Capacitor 7 con estos plugins: background-geolocation, filesystem, share, app, local-notifications y camera.
+- Compilación: `.github/workflows/compilar-apk.yml` en la rama `geocampo2` publica `GeoCampo2.apk` como pre-release.
+
+## Funciones de GeoCampo 2 (además de las de la original)
+- **Mapas sin conexión:** descarga por vista o alrededor de una capa, con rango de zoom y máximo de 30.000 mosaicos. Sin internet, si falta un nivel de zoom amplía el mosaico guardado de un nivel menor.
+- **Fotos:** sello visible con fecha, hora, lat/lon y E/N 9377, más EXIF GPS. Se guardan como punto o adjuntas a un elemento. Se exportan como "KMZ con fotos" o "ZIP de JPG + índice CSV".
+- **Ir a un punto:** brújula, o rumbo por movimiento si no hay brújula. También ir a una coordenada (WGS84, GMS, 9377, 3116) y medición rápida.
+- **Edición de geometría:** arrastrar, insertar y borrar vértices, mover un vértice a la posición GPS y simplificar. Además, recortar huecos y crear buffer (completo, anillo o retiro interno).
+- **Mapas georreferenciados:** GeoPDF (ISO/OGC, incluso con object streams comprimidos), GeoTIFF (lee el EPSG o lo pregunta), JPG/PNG/TIF con world file (+ `.prj` opcional) y KMZ GroundOverlay. Se muestran con una homografía de 4 esquinas y transparencia ajustable.
+- **Shapefile:** se importa desde `.zip` o desde `.shp` + `.dbf` + `.prj` seleccionados juntos. Se exporta en `.zip` en 9377 o WGS84.
+- **Capas por proyecto:** capa activa ★, etiquetas, colores por atributo (escala de 5 rangos si el campo es numérico, por categoría si es texto) y mover elementos entre capas.
+- **Reporte PDF:** mapa con vértices numerados, escala y norte, resumen, atributos, tabla de vértices en 9377 y registro fotográfico (incluye las fotos tomadas dentro del lote).
+
+## Pendientes / ideas
+- Play Store, aplazado. Requiere target API 36 (Capacitor 8), AAB con clave privada, aviso de ubicación y declaraciones.
+- No se incluyeron (decisión de Jhon): grilla de muestreo, respaldo automático, formularios personalizados y notas de voz.
 
 ## Cómo probar
-Servir `docs/` con `python3 -m http.server` y probar con Playwright + Chrome, simulando la geolocalización.
-Para probar la APK sin un celular se puede reemplazar `vendor/capacitor.js` por un simulacro de los plugins.
+- Servir `docs/` con `python3 -m http.server` y usar Playwright + Chrome con geolocalización simulada.
+- Los mosaicos del mapa base se simulan con `context.route`.
+- Para generar archivos de prueba (GeoTIFF, GeoPDF con el driver PDF de GDAL, shapefile) sirven `rasterio`, `pyshp` y `pikepdf` (este último para el PDF con object streams).

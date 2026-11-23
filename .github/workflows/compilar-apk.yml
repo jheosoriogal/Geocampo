@@ -1,8 +1,8 @@
-name: Compilar APK
+name: Compilar APK GeoCampo 2
 
 on:
   push:
-    branches: [main]
+    branches: [geocampo2]
   workflow_dispatch:
 
 permissions:
@@ -29,24 +29,26 @@ jobs:
       - name: Copiar la app web al proyecto Android
         run: npx cap sync android
 
-      - name: Compilar APK
+      - name: Compilar APK GeoCampo 2
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon --stacktrace
-          cp app/build/outputs/apk/release/app-release.apk ../GeoCampo.apk
+          cp app/build/outputs/apk/release/app-release.apk ../GeoCampo2.apk
 
       - name: Guardar APK en la ejecución
         uses: actions/upload-artifact@v4
         with:
-          name: GeoCampo-apk
-          path: GeoCampo.apk
+          name: GeoCampo2-apk
+          path: GeoCampo2.apk
 
       - name: Publicar descarga (Releases)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v0.2.${{ github.run_number }}
-          name: GeoCampo 0.2.${{ github.run_number }}
-          body: APK compilado automáticamente. Descárgalo desde el celular e instálalo.
-          files: GeoCampo.apk
-          make_latest: true
+          tag_name: v2.0.${{ github.run_number }}
+          name: GeoCampo 2 — 2.0.${{ github.run_number }}
+          body: GeoCampo 2 (versión nueva). Se instala aparte de GeoCampo; no lo reemplaza.
+          files: GeoCampo2.apk
+          target_commitish: geocampo2
+          prerelease: true
+          make_latest: false
