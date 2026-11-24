@@ -27,7 +27,13 @@ function onOrient(e) {
 }
 let orientOn = false;
 function startCompass() {
-  if (orientOn) return; orientOn = true;
+  if (orientOn) return;
+  // iPhone: la brújula requiere permiso explícito, pedido desde un toque del usuario
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(st => { if (st === 'granted') { orientOn = true; window.addEventListener('deviceorientation', onOrient); } }).catch(() => {});
+    return;
+  }
+  orientOn = true;
   if ('ondeviceorientationabsolute' in window) window.addEventListener('deviceorientationabsolute', onOrient);
   else window.addEventListener('deviceorientation', onOrient);
 }

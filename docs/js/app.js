@@ -12,6 +12,9 @@ const TYPE = {point: 'Punto', line: 'Track / línea', polygon: 'Polígono'};
 const CAPX = window.capacitorExports;
 const CAP = !!(CAPX && CAPX.Capacitor && CAPX.Capacitor.isNativePlatform());
 const plug = n => CAP ? CAPX.registerPlugin(n) : null;
+/* iPhone / iPad (incluye iPad con modo escritorio) */
+const IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const STANDALONE = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
 const BG = plug('BackgroundGeolocation'), FS = plug('Filesystem'), SH = plug('Share'), APPN = plug('App');
 const LN = plug('LocalNotifications');
 let notifAsked = false;
@@ -863,9 +866,27 @@ async function nativeSave(blob, name) {
   } catch (e) { toast('No se pudo guardar en Documentos; se abrirá Compartir', 3500); await nativeShare(blob, name); }
 }
 function download(blob, name) {
-  if (CAP) return nativeSave(blob, name); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000); }
+  if (CAP) return nativeSave(blob, name);
+  if (IOS) return iosSave(blob, name); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 3000); }
+async function iosSave(blob, name) {
+  // En iPhone la forma confiable de guardar es la hoja de compartir: “Guardar en Archivos”
+  const file = new File([blob], name, {type: /\.(kml|kmz|gpx|geojson|zip|csv)$/i.test(name) ? 'application/octet-stream' : (blob.type || 'application/octet-stream')});
+  const canShare = navigator.canShare && navigator.canShare({files: [file]});
+  if (canShare) {
+    try { await navigator.share({files: [file]}); return; }
+    catch (e) {
+      if (e.name === 'AbortError') return;
+      // el permiso del toque venció mientras se preparaba el archivo: pedir un toque nuevo
+      return dialog({title: 'Archivo listo', body: `<p>${esc(name)}</p><p class="mut">Toca “Guardar o enviar” y elige <b>Guardar en Archivos</b>, WhatsApp, correo…</p>`,
+        buttons: [{label: 'Cerrar', value: null}, {label: 'Guardar o enviar', cls: 'pri', value: null}],
+        onOpen: (d, fin) => { const b = d.querySelectorAll('button')[1]; b.onclick = () => { navigator.share({files: [file]}).catch(() => {}); fin(null); }; }});
+    }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+}
 async function shareFile(blob, name) {
   if (CAP) return nativeShare(blob, name);
+  if (IOS) return iosSave(blob, name);
   const file = new File([blob], name, {type: blob.type});
   if (navigator.canShare && navigator.canShare({files: [file]})) {
     try { await navigator.share({files: [file], title: name}); } catch (e) { if (e.name !== 'AbortError') { toast('No se pudo compartir; se descargará'); download(blob, name); } }
@@ -937,6 +958,7 @@ function openMore() {
     <p><b>Capas:</b> ★ marca la capa activa (donde se guarda lo nuevo); crea una por finca o visita. Con ⚙ eliges etiquetas y colores por atributo.</p>
     <p><b>Sin internet:</b> en Archivos ▸ Mapas sin conexión descarga la zona antes de salir. Puedes cargar mapas propios: PDF georreferenciado, GeoTIFF, JPG/PNG con su .jgw/.pgw (selecciónalos juntos) o KMZ con imagen.</p>
     <p><b>Coordenadas:</b> WGS84 y MAGNA-SIRGAS Origen Nacional (EPSG:9377). Toca el recuadro superior para ver grados-minutos-segundos.</p>
+    ${IOS && !CAP ? '<p><b>En iPhone:</b> mientras grabas un track o polígono deja la app abierta y la pantalla encendida (iOS pausa el GPS de las apps web en segundo plano). Para guardar archivos usa Descargar ▸ “Guardar en Archivos”.</p>' : ''}
     ${CAP ? '<p><b>Grabar con pantalla apagada:</b> al iniciar un track o polígono con GPS aparece una notificación “GeoCampo está grabando”; mientras esté, puedes apagar la pantalla o guardar el celular. Si el celular tiene ahorro de batería agresivo, excluye a GeoCampo en Ajustes ▸ Batería.</p>' : '<p><b>Importante:</b> en la versión web deja la pantalla encendida mientras grabas; Android pausa el GPS de las páginas web con la pantalla apagada. La app instalada (APK) no tiene esta limitación.</p>'}
     <p class="mut">Tus datos se guardan solo en este celular. Exporta con frecuencia como respaldo.</p>`}); };
 }

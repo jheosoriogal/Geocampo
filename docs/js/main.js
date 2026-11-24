@@ -22,6 +22,13 @@
     if (go) beginRec(draft); else Store.rm('rec');
   }
   if (!CAP && 'serviceWorker' in navigator && window.isSecureContext) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // pedir almacenamiento persistente (evita que el navegador borre los datos por falta de espacio)
+  if (!CAP && navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+  // iPhone en Safari (sin instalar): explicar cómo instalar
+  if (IOS && !CAP && !STANDALONE && !(await Store.get('iosHint').catch(() => null))) {
+    Store.set('iosHint', 1);
+    dialog({title: 'Instala GeoCampo 2 en tu iPhone', body: `<ol style="padding-left:20px;line-height:1.6"><li>Toca el botón <b>Compartir</b> de Safari (el cuadro con la flecha hacia arriba).</li><li>Elige <b>Agregar a pantalla de inicio</b> y luego <b>Agregar</b>.</li><li>Abre GeoCampo 2 desde el nuevo ícono y permite la <b>ubicación</b>.</li></ol><p class="mut">Instalada funciona sin internet y a pantalla completa. Tus datos quedan dentro de la app: si borras el ícono, se borran.</p>`, buttons: [{label: 'Entendido', value: true, cls: 'pri'}]});
+  }
   if (CAP) APPN.addListener('backButton', () => {
     if (dlgFinish) dlgFinish(null);
     else if (S.backHook) S.backHook();

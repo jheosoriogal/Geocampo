@@ -7,7 +7,12 @@
 <meta name="theme-color" content="#1f5f3a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GeoCampo 2">
+<meta name="format-detection" content="telephone=no">
 <link rel="stylesheet" href="vendor/leaflet.css">
 <script src="vendor/leaflet.js"></script>
 <script src="vendor/proj4.js"></script>
@@ -62,7 +67,7 @@ html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",Ro
 #dlg{background:#fff;border-radius:14px;max-width:460px;width:100%;max-height:88vh;overflow:auto;padding:16px}
 h3{margin:2px 0 10px;font-size:18px}
 label{display:block;font-size:13px;color:var(--mut);margin:8px 0}
-input,select,textarea{font:15px system-ui,sans-serif;padding:10px;border:1px solid #cbd5e0;border-radius:8px;width:100%;margin-top:4px;color:var(--tx);background:#fff}
+input,select,textarea{font:16px system-ui,sans-serif;padding:10px;border:1px solid #cbd5e0;border-radius:8px;width:100%;margin-top:4px;color:var(--tx);background:#fff}
 table.kv{width:100%;border-collapse:collapse;margin-top:8px;font-size:14px;font-variant-numeric:tabular-nums}
 table.kv td{padding:6px 4px;border-bottom:1px solid #edf2f7;vertical-align:top}
 table.kv td:first-child{color:var(--mut);width:38%}

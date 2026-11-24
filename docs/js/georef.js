@@ -3,7 +3,7 @@
    Mapas georreferenciados (PDF, GeoTIFF, imagen + world file, KMZ)
    y Shapefile (importar / exportar)
    ===================================================================== */
-const MAX_PX = 4096;
+const MAX_PX = IOS ? 3600 : 4096;   // iOS limita el tamaño de los lienzos (canvas)
 const OV_CRS = {'EPSG:9377': 'MAGNA-SIRGAS Origen-Nacional (9377)', 'EPSG:3116': 'MAGNA-SIRGAS Bogotá (3116)', 'EPSG:3115': 'MAGNA-SIRGAS Oeste (3115)', 'EPSG:3117': 'MAGNA-SIRGAS Este Central (3117)', 'EPSG:3118': 'MAGNA-SIRGAS Este (3118)', 'EPSG:3114': 'MAGNA-SIRGAS Oeste-Oeste (3114)', 'EPSG:4326': 'WGS84 grados (4326)', 'EPSG:3857': 'Web Mercator (3857)', 'EPSG:32618': 'UTM 18N (32618)', 'EPSG:32617': 'UTM 17N (32617)', 'EPSG:32619': 'UTM 19N (32619)'};
 
 /* ---- Homografía (proyección de 4 puntos) ---- */

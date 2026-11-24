@@ -38,6 +38,17 @@ Las dos se instalan a la vez en el celular y sus datos están separados. Para pa
 - **Capas por proyecto:** capa activa ★, etiquetas, colores por atributo (escala de 5 rangos si el campo es numérico, por categoría si es texto) y mover elementos entre capas.
 - **Reporte PDF:** mapa con vértices numerados, escala y norte, resumen, atributos, tabla de vértices en 9377 y registro fotográfico (incluye las fotos tomadas dentro del lote).
 
+## Versión web para iPhone (GitHub Pages)
+- Se publica desde la rama `geocampo2`, carpeta `/docs`, en https://jheosoriogal.github.io/Geocampo/ (Settings ▸ Pages; Jhon lo activa a mano, porque el proxy no permite la API de Pages).
+- Adaptaciones para iOS en el código (`IOS`, `STANDALONE` en app.js):
+  - Descargar abre la hoja de compartir, con respaldo si vence el permiso del toque.
+  - Permiso de brújula con `DeviceOrientationEvent.requestPermission`.
+  - Letra de 16 px en los campos.
+  - Lienzos de máximo 3600 px.
+  - `storage.persist()`.
+  - Aviso de instalación la primera vez.
+- Limitación: iOS pausa el GPS de las apps web en segundo plano; para grabar hay que mantener la pantalla encendida.
+
 ## Pendientes / ideas
 - Play Store, aplazado. Requiere target API 36 (Capacitor 8), AAB con clave privada, aviso de ubicación y declaraciones.
 - No se incluyeron (decisión de Jhon): grilla de muestreo, respaldo automático, formularios personalizados y notas de voz.
